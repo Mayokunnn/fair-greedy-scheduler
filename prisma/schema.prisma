@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workday {
+  id         String     @id @default(uuid())
+  date       DateTime   @unique
+  schedule   Schedule?
+}
+
+model Schedule {
+  id             String   @id @default(uuid())
+
+  employee       User     @relation("EmployeeSchedules", fields: [employeeId], references: [id])
+  employeeId     String
+
+  assignedBy     User     @relation("AssignedBy", fields: [assignedById], references: [id])
+  assignedById   String     
+
+  workday        Workday  @relation(fields: [workdayId], references: [id])
+  workdayId      String   @unique
+
+  createdAt      DateTime @default(now())
+}
+
+
+model User {
+  id        String      @id @default(uuid())
+  email     String      @unique
+  password  String
+  fullName  String
+  role      Role        @default(EMPLOYEE)
+  createdAt DateTime    @default(now())
+
+  schedules Schedule[]  @relation("EmployeeSchedules") 
+  assignedSchedules Schedule[] @relation("AssignedBy") 
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}

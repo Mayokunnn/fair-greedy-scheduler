@@ -1,0 +1,17 @@
+import { Request, Response } from 'express';
+import { generateWorkdaysService } from '../services/workday.service';
+
+export const generateWorkdays = async (req: any, res: any) => {
+  const { start, end } = req.query;
+
+  if (!start || !end) {
+    return res.status(400).json({ message: 'Start and end dates are required' });
+  }
+
+  try {
+    const result = await generateWorkdaysService(new Date(start as string), new Date(end as string));
+    res.json({ message: 'Workdays generated successfully', data: result });
+  } catch (err) {
+    res.status(500).json({ message: 'Error generating workdays', error: err });
+  }
+};
