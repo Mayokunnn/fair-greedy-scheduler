@@ -16,7 +16,7 @@ datasource db {
 model Workday {
   id         String     @id @default(uuid())
   date       DateTime   @unique
-  schedule   Schedule?
+  schedules  Schedule[]  // 👈 make this a one-to-many
 }
 
 model Schedule {
@@ -29,7 +29,7 @@ model Schedule {
   assignedById   String     
 
   workday        Workday  @relation(fields: [workdayId], references: [id])
-  workdayId      String   @unique
+  workdayId      String   
 
   createdAt      DateTime @default(now())
 }
