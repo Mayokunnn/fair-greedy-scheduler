@@ -1,7 +1,7 @@
-import { PrismaClient, Role } from "@prisma/client";
+import { PrismaClient, Role, Workday } from "@prisma/client";
 const prisma = new PrismaClient();
 
-export const fairGreedyScheduler = async (currentUserId: string) => {
+export const fairGreedyScheduler = async (currentUserId: string, workdays: Workday[]) => {
   const employees = await prisma.user.findMany({
     where: { role: Role.EMPLOYEE },
     select: {
@@ -21,13 +21,10 @@ export const fairGreedyScheduler = async (currentUserId: string) => {
     },
   });
 
-  const workdays = await prisma.workday.findMany();
-  
-  // Sort by number of assigned schedules
   employees.sort((a, b) => a.schedules.length - b.schedules.length);
-  
+
   const assignments = [];
-  
+
   for (let i = 0; i < workdays.length; i++) {
     const employee = employees[i % employees.length];
     const alreadyScheduled = await prisma.schedule.findFirst({
@@ -36,7 +33,6 @@ export const fairGreedyScheduler = async (currentUserId: string) => {
         employeeId: employee.id,
       },
     });
-    
 
     if (alreadyScheduled) continue;
 
@@ -55,19 +51,25 @@ export const fairGreedyScheduler = async (currentUserId: string) => {
   return assignments;
 };
 
-export const basicGreedyScheduler = async (currentUserId: string) => {
+export const basicGreedyScheduler = async (currentUserId: string, workdays: Workday[]) => {
   const employees = await prisma.user.findMany({
     where: { role: Role.EMPLOYEE },
-    include: { schedules: true },
   });
 
-  const workdays = await prisma.workday.findMany();
-
   const assignments = [];
-
   let i = 0;
+
   for (const day of workdays) {
     const employee = employees[i % employees.length];
+
+    const existing = await prisma.schedule.findFirst({
+      where: {
+        workdayId: day.id,
+        employeeId: employee.id,
+      },
+    });
+    if (existing) continue;
+
     const schedule = await prisma.schedule.create({
       data: {
         employeeId: employee.id,
@@ -75,6 +77,7 @@ export const basicGreedyScheduler = async (currentUserId: string) => {
         assignedById: currentUserId,
       },
     });
+
     assignments.push(schedule);
     i++;
   }
@@ -82,18 +85,7 @@ export const basicGreedyScheduler = async (currentUserId: string) => {
   return assignments;
 };
 
-export const roundRobinScheduler = async (userId: string) => {
-  const workdays = await prisma.workday.findMany({
-    where: {
-      schedules: {
-        some: {
-          assignedById: userId,
-        },
-      },
-    },
-    orderBy: { date: "asc" },
-  });
-
+export const roundRobinScheduler = async (userId: string, workdays: Workday[]) => {
   const employees = await prisma.user.findMany({
     where: { role: 'EMPLOYEE' },
   });
@@ -101,19 +93,26 @@ export const roundRobinScheduler = async (userId: string) => {
   const schedules = [];
   const employeeLoad: Record<string, number> = {};
 
-  employees.forEach((e: any) => {
+  employees.forEach((e) => {
     employeeLoad[e.id] = 0;
   });
 
   let currentIndex = 0;
 
   for (const day of workdays) {
-    // sort by least loaded employees
     const sorted = [...employees].sort(
       (a, b) => employeeLoad[a.id] - employeeLoad[b.id]
     );
 
     const employee = sorted[currentIndex % sorted.length];
+
+    const existing = await prisma.schedule.findFirst({
+      where: {
+        workdayId: day.id,
+        employeeId: employee.id,
+      },
+    });
+    if (existing) continue;
 
     const schedule = await prisma.schedule.create({
       data: {
@@ -125,25 +124,13 @@ export const roundRobinScheduler = async (userId: string) => {
 
     schedules.push(schedule);
     employeeLoad[employee.id] += 1;
-
     currentIndex++;
   }
 
   return schedules;
 };
 
-
-export const randomScheduler = async (userId: string) => {
-  const workdays = await prisma.workday.findMany({
-    where: {
-      schedules: {
-        some: {
-          assignedById: userId, 
-        },
-      },
-    },
-  });
-
+export const randomScheduler = async (userId: string, workdays: Workday[]) => {
   const employees = await prisma.user.findMany({
     where: { role: 'EMPLOYEE' },
   });
@@ -151,8 +138,15 @@ export const randomScheduler = async (userId: string) => {
   const schedules = [];
 
   for (const day of workdays) {
-    const randomEmployee =
-      employees[Math.floor(Math.random() * employees.length)];
+    const randomEmployee = employees[Math.floor(Math.random() * employees.length)];
+
+    const existing = await prisma.schedule.findFirst({
+      where: {
+        workdayId: day.id,
+        employeeId: randomEmployee.id,
+      },
+    });
+    if (existing) continue;
 
     const schedule = await prisma.schedule.create({
       data: {
