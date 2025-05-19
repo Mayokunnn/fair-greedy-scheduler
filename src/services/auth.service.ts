@@ -7,7 +7,7 @@ const SALT_ROUNDS =  10
 
 type Role = 'ADMIN' | 'EMPLOYEE';
 
-export const signup = async (email: string, password: string, fullName: string, role: Role = "EMPLOYEE") => {
+export const signup = async (email: string, password: string, position: string, fullName: string, role: Role = "EMPLOYEE") => {
   const salt = await bcrypt.genSalt(10)
     const hashedPassword = await bcrypt.hash(password, salt);  
     const user = await prisma.user.create({
@@ -15,6 +15,7 @@ export const signup = async (email: string, password: string, fullName: string, 
         email,
         password: hashedPassword,
         fullName,
+        position,
         role,
       },
       select: {
@@ -23,6 +24,7 @@ export const signup = async (email: string, password: string, fullName: string, 
         fullName: true,
         role: true,
         createdAt: true,
+        position: true,
         schedules: true,
       },
     });
@@ -65,6 +67,7 @@ export const getMe = async (token: string) => {
       role: true,
       createdAt: true,
       schedules: true,
+      position: true,
     },});
     return user;
   } catch {

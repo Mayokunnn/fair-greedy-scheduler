@@ -16,7 +16,7 @@ datasource db {
 model Workday {
   id         String     @id @default(uuid())
   date       DateTime   @unique
-  schedules  Schedule[]  // 👈 make this a one-to-many
+  schedules  Schedule[]
 }
 
 model Schedule {
@@ -41,11 +41,13 @@ model User {
   password  String
   fullName  String
   role      Role        @default(EMPLOYEE)
+  position  String
   createdAt DateTime    @default(now())
 
-  schedules Schedule[]  @relation("EmployeeSchedules") 
-  assignedSchedules Schedule[] @relation("AssignedBy") 
+  schedules          Schedule[] @relation("EmployeeSchedules") 
+  assignedSchedules  Schedule[] @relation("AssignedBy") 
 }
+
 
 enum Role {
   ADMIN

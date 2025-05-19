@@ -10,9 +10,9 @@ export const register = async (req: any, res: any) => {
       return res.status(400).json({ message: "Request body is missing" });
     }
 
-    const { fullname, email, password, role } = req.body;
+    const { fullname, email, password, role, position } = req.body;
 
-    if (!fullname || !email || !password || !role) {
+    if (!fullname || !email || !password || !position) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -24,7 +24,7 @@ export const register = async (req: any, res: any) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const user = await signup(email, password, fullname, role);
+    const user = await signup(email, password, position, fullname, role);
 
     res.status(201).json({ message: "User registered successfully", user });
   } catch (err: any) {

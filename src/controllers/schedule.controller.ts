@@ -91,7 +91,10 @@ export const generateRoundRobinSchedule = async (req: Request, res: Response) =>
   }
 };
 
-export const assignSingleSchedule = async (req: Request, res: Response) => {
+export const assignSingleSchedule = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const { employeeId, date } = req.body;
   const userId = req.user.id;
 
@@ -110,7 +113,8 @@ export const assignSingleSchedule = async (req: Request, res: Response) => {
     });
 
     if (existing) {
-      return res.status(400).json({ message: 'Employee is already scheduled for this day' });
+      res.status(400).json({ message: 'Employee is already scheduled for this day' });
+      return;
     }
 
     const schedule = await prisma.schedule.create({
