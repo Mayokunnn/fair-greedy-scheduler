@@ -19,34 +19,46 @@ model Workday {
   schedules  Schedule[]
 }
 
+enum ScheduleType {
+  FAIR
+  BASIC
+  RANDOM
+  ROUND_ROBIN
+  MANUAL
+}
+
 model Schedule {
-  id             String   @id @default(uuid())
+  id           String       @id @default(uuid())
 
-  employee       User     @relation("EmployeeSchedules", fields: [employeeId], references: [id])
-  employeeId     String
+  employee     User         @relation("EmployeeSchedules", fields: [employeeId], references: [id])
+  employeeId   String
 
-  assignedBy     User     @relation("AssignedBy", fields: [assignedById], references: [id])
-  assignedById   String     
+  assignedBy   User         @relation("AssignedBy", fields: [assignedById], references: [id])
+  assignedById String
 
-  workday        Workday  @relation(fields: [workdayId], references: [id])
-  workdayId      String   
+  workday      Workday      @relation(fields: [workdayId], references: [id])
+  workdayId    String
 
-  createdAt      DateTime @default(now())
+  type         ScheduleType @default(FAIR)
+
+  createdAt    DateTime     @default(now())
 }
 
 
 model User {
-  id        String      @id @default(uuid())
-  email     String      @unique
-  password  String
-  fullName  String
-  role      Role        @default(EMPLOYEE)
-  position  String
-  createdAt DateTime    @default(now())
+  id                  String      @id @default(uuid())
+  email               String      @unique
+  password            String
+  fullName            String
+  role                Role        @default(EMPLOYEE)
+  createdAt           DateTime    @default(now())
+  position            String
+  preferredDays       String[]
 
-  schedules          Schedule[] @relation("EmployeeSchedules") 
-  assignedSchedules  Schedule[] @relation("AssignedBy") 
+  schedules           Schedule[]  @relation("EmployeeSchedules") 
+  assignedSchedules   Schedule[]  @relation("AssignedBy") 
 }
+
 
 
 enum Role {

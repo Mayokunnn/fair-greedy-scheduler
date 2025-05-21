@@ -4,6 +4,6 @@ import { generateWorkdays } from '../controllers/workday.controller';
 
 const router = express.Router();
 
-router.post('/generate', authorizeRoles('ADMIN'), generateWorkdays);
+router.post('/generate', generateWorkdays);
 
 export default router;

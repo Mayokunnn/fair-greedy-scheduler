@@ -5,7 +5,7 @@ import authRoutes from './routes/auth.routes';
 import scheduleRoutes from './routes/schedule.routes';
 import userRoutes from './routes/user.routes';
 import workdayRoutes from './routes/workday.routes';
-import { authenticate } from './middleware/auth.middleware';
+import { authenticate, authorizeRoles } from './middleware/auth.middleware';
 import bodyParser from 'body-parser';
 
 dotenv.config();
@@ -19,7 +19,7 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use('/auth', authRoutes);
-app.use('/schedule', authenticate, scheduleRoutes);
+app.use('/schedule', authenticate, authorizeRoles('ADMIN'), scheduleRoutes);
 app.use('/workday', authenticate, workdayRoutes);
 app.use('/users', authenticate, userRoutes);
 

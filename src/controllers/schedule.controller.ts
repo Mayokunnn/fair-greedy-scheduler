@@ -1,11 +1,12 @@
-import { NextFunction, Request, Response } from 'express';
-import prisma from '../utils/prisma';
+import { NextFunction, Request, Response } from "express";
+import prisma from "../utils/prisma";
 import {
   fairGreedyScheduler,
   basicGreedyScheduler,
   roundRobinScheduler,
-  randomScheduler
-} from '../services/scheduler.service';
+  randomScheduler,
+} from "../services/scheduler.service";
+import { generateWorkdaysService } from "../services/workday.service";
 
 declare global {
   namespace Express {
@@ -18,88 +19,136 @@ declare global {
   }
 }
 
-export const generateFairGreedySchedule = async (req: Request, res: Response) => {
+export const generateFairGreedySchedule = async (req: any, res: any) => {
   try {
     const { from, to } = req.body;
+
+    if (!from || !to) {
+      return res
+        .status(400)
+        .json({ message: "Please provide both 'from' and 'to' dates." });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    await generateWorkdaysService(fromDate, toDate);
+
     const workdays = await prisma.workday.findMany({
       where: {
         date: {
-          gte: new Date(from),
-          lte: new Date(to),
+          gte: fromDate,
+          lte: toDate,
         },
       },
     });
     const result = await fairGreedyScheduler(req.user.id, workdays);
 
+    res.json({ message: "Fair Greedy Schedule generated", result });
   } catch (err) {
-    res.status(500).json({ message: 'Error generating schedule', error: err });
+    res.status(500).json({ message: "Error generating schedule", error: err });
   }
 };
 
-export const generateBasicGreedySchedule = async (req: Request, res: Response) => {
+export const generateBasicGreedySchedule = async (req: any, res: any) => {
   try {
     const { from, to } = req.body;
+    if (!from || !to) {
+      return res
+        .status(400)
+        .json({ message: "Please provide both 'from' and 'to' dates." });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    await generateWorkdaysService(fromDate, toDate);
+
     const workdays = await prisma.workday.findMany({
       where: {
         date: {
-          gte: new Date(from),
-          lte: new Date(to),
+          gte: fromDate,
+          lte: toDate,
         },
       },
     });
     const result = await basicGreedyScheduler(req.user.id, workdays);
-    res.json({ message: 'Basic Greedy Schedule generated', result });
+    res.json({ message: "Basic Greedy Schedule generated", result });
   } catch (err) {
-    res.status(500).json({ message: 'Error generating schedule', error: err });
+    res.status(500).json({ message: "Error generating schedule", error: err });
   }
 };
 
-export const generateRandomSchedule = async (req: Request, res: Response) => {
+export const generateRandomSchedule = async (req: any, res: any) => {
   try {
     const { from, to } = req.body;
+
+    if (!from || !to) {
+      return res
+        .status(400)
+        .json({ message: "Please provide both 'from' and 'to' dates." });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    await generateWorkdaysService(fromDate, toDate);
+
     const workdays = await prisma.workday.findMany({
       where: {
         date: {
-          gte: new Date(from),
-          lte: new Date(to),
+          gte: fromDate,
+          lte: toDate,
         },
       },
     });
     const result = await randomScheduler(req.user.id, workdays);
-    res.json({ message: 'Random Schedule generated', result });
+    res.json({ message: "Random Schedule generated", result });
   } catch (err) {
-    res.status(500).json({ message: 'Error generating schedule', error: err });
+    res.status(500).json({ message: "Error generating schedule", error: err });
   }
 };
 
-export const generateRoundRobinSchedule = async (req: Request, res: Response) => {
+export const generateRoundRobinSchedule = async (req: any, res: any) => {
   try {
     const { from, to } = req.body;
+    if (!from || !to) {
+      return res
+        .status(400)
+        .json({ message: "Please provide both 'from' and 'to' dates." });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    await generateWorkdaysService(fromDate, toDate);
+
     const workdays = await prisma.workday.findMany({
       where: {
         date: {
-          gte: new Date(from),
-          lte: new Date(to),
+          gte: fromDate,
+          lte: toDate,
         },
       },
-      orderBy: { date: 'asc' }
     });
     const result = await roundRobinScheduler(req.user.id, workdays);
-    res.json({ message: 'Round Robin Schedule generated', result });
+    res.json({ message: "Round Robin Schedule generated", result });
   } catch (err) {
-    res.status(500).json({ message: 'Error generating schedule', error: err });
+    res.status(500).json({ message: "Error generating schedule", error: err });
   }
 };
 
 export const assignSingleSchedule = async (
   req: Request,
-  res: Response,
+  res: Response
 ): Promise<void> => {
   const { employeeId, date } = req.body;
   const userId = req.user.id;
 
   try {
-    let workday = await prisma.workday.findFirst({ where: { date: new Date(date) } });
+    let workday = await prisma.workday.findFirst({
+      where: { date: new Date(date) },
+    });
 
     if (!workday) {
       workday = await prisma.workday.create({ data: { date: new Date(date) } });
@@ -113,7 +162,9 @@ export const assignSingleSchedule = async (
     });
 
     if (existing) {
-      res.status(400).json({ message: 'Employee is already scheduled for this day' });
+      res
+        .status(400)
+        .json({ message: "Employee is already scheduled for this day" });
       return;
     }
 
@@ -125,19 +176,20 @@ export const assignSingleSchedule = async (
       },
     });
 
-    res.status(201).json({ message: 'Schedule assigned', schedule });
+    res.status(201).json({ message: "Schedule assigned", schedule });
   } catch (err) {
-    res.status(500).json({ message: 'Error assigning schedule', error: err });
+    res.status(500).json({ message: "Error assigning schedule", error: err });
   }
 };
-
 
 export const evaluateSchedule = async (req: any, res: any) => {
   try {
     const { from, to } = req.body;
 
     if (!from || !to) {
-      return res.status(400).json({ message: "from and to dates are required" });
+      return res
+        .status(400)
+        .json({ message: "from and to dates are required" });
     }
 
     const workdays = await prisma.workday.findMany({
@@ -157,36 +209,97 @@ export const evaluateSchedule = async (req: any, res: any) => {
       roundRobinScheduler(req.user.id, workdays),
     ]);
 
-    const fairnessMetric = (schedules: any[]) => {
-      const countMap: Record<string, number> = {};
-      schedules.forEach((s) => {
-        countMap[s.employeeId] = (countMap[s.employeeId] || 0) + 1;
+    const getWeekday = (date: Date) => {
+      return new Date(date).toLocaleDateString("en-US", { weekday: "long" });
+    };
+
+    const fetchPreferredDays = async () => {
+      const users = await prisma.user.findMany({
+        where: { role: "EMPLOYEE" },
+        select: {
+          id: true,
+          preferredDays: true,
+        },
       });
 
-      const counts = Object.values(countMap);
-      const avg = counts.reduce((a, b) => a + b) / counts.length;
-      const stdDev = Math.sqrt(
-        counts.map((c) => (c - avg) ** 2).reduce((a, b) => a + b) / counts.length
-      );
-      return stdDev;
+      const map: Record<string, string[]> = {};
+      users.forEach((u) => {
+        map[u.id] = u.preferredDays || [];
+      });
+
+      return map;
     };
+
+    const preferredMap = await fetchPreferredDays();
+
+    const fairnessScore = (schedules: any[]) => {
+      const scoreMap: Record<string, number> = {};
+
+      schedules.forEach((s) => {
+        const userId = s.employeeId;
+        const workday = s.workday || s.workdayId;
+
+        let workdayDate: Date;
+
+        if (typeof workday === "string") {
+          // Fetch workday if not included
+          // In real app, optimize this with includes
+          return; // skip score, not enough info
+        } else {
+          workdayDate = workday.date;
+        }
+
+        const dayName = getWeekday(workdayDate);
+        const prefs = preferredMap[userId] || [];
+
+        if (!scoreMap[userId]) scoreMap[userId] = 0;
+
+        if (prefs.includes(dayName)) {
+          scoreMap[userId] += 1;
+        } else {
+          scoreMap[userId] -= 1;
+        }
+
+        // Clamp between -3 and +3
+        scoreMap[userId] = Math.max(-3, Math.min(3, scoreMap[userId]));
+      });
+
+      const values = Object.values(scoreMap);
+      const avg =
+        values.reduce((acc, val) => acc + val, 0) / (values.length || 1);
+      const stdDev = Math.sqrt(
+        values.map((s) => (s - avg) ** 2).reduce((a, b) => a + b, 0) /
+          (values.length || 1)
+      );
+
+      return { stdDev, scores: scoreMap };
+    };
+
+    const fairMetric = fairnessScore(fair);
+    const basicMetric = fairnessScore(basic);
+    const randomMetric = fairnessScore(random);
+    const roundMetric = fairnessScore(round);
 
     res.json({
       fairGreedy: {
         total: fair.length,
-        fairnessIndex: fairnessMetric(fair),
+        fairnessIndex: fairMetric.stdDev,
+        scores: fairMetric.scores,
       },
       basicGreedy: {
         total: basic.length,
-        fairnessIndex: fairnessMetric(basic),
+        fairnessIndex: basicMetric.stdDev,
+        scores: basicMetric.scores,
       },
       random: {
         total: random.length,
-        fairnessIndex: fairnessMetric(random),
+        fairnessIndex: randomMetric.stdDev,
+        scores: randomMetric.scores,
       },
       roundRobin: {
         total: round.length,
-        fairnessIndex: fairnessMetric(round),
+        fairnessIndex: roundMetric.stdDev,
+        scores: roundMetric.scores,
       },
     });
   } catch (err) {
@@ -200,16 +313,16 @@ export const getAllSchedules = async (req: any, res: any) => {
     const schedules = await prisma.schedule.findMany({
       include: {
         employee: {
-          select: { id: true, fullName: true, email: true }
+          select: { id: true, fullName: true, email: true },
         },
         workday: true,
         assignedBy: {
-          select: { id: true, fullName: true, email: true }
-        }
+          select: { id: true, fullName: true, email: true },
+        },
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: "desc",
+      },
     });
 
     res.json(schedules);
@@ -217,8 +330,6 @@ export const getAllSchedules = async (req: any, res: any) => {
     res.status(500).json({ message: "Error fetching schedules", error: err });
   }
 };
-
-
 
 export const getMySchedule = async (req: any, res: any) => {
   try {

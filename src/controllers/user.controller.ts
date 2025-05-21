@@ -36,7 +36,9 @@ export const getAllUsers = async (req: any, res: any) => {
       fullName: true,
       role: true,
       createdAt: true,
-      schedules: true,
+      schedules: {
+        where: { type: "FAIR" },
+      },
     },});
     res.json(users);
   } catch (err) {
