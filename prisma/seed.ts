@@ -20,7 +20,7 @@ const days: WeekDay[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"]
 
 const generatePreferredDays = (): WeekDay[] => {
   const shuffled = [...days].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 3); 
+  return shuffled.slice(0, 2); // Randomly select 2 days
 };
 
 async function seed() {

@@ -15,3 +15,18 @@ export const generateWorkdays = async (req: any, res: any) => {
     res.status(500).json({ message: 'Error generating workdays', error: err });
   }
 };
+
+export const getWorkdays = async (req: Request, res: Response) => {
+  const { from, to } = req.query;
+
+  if (!from || !to) {
+    return res.status(400).json({ message: 'From and to dates are required' });
+  }
+
+  try {
+    const workdays = await generateWorkdaysService(new Date(from as string), new Date(to as string));
+    res.json({ message: 'Workdays retrieved successfully', data: workdays });
+  } catch (err) {
+    res.status(500).json({ message: 'Error retrieving workdays', error: err });
+  }
+}

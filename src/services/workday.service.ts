@@ -26,3 +26,15 @@ export const generateWorkdaysService = async (
 
   return createdWorkdays;
 };
+
+
+export const getWorkdaysService = async (from: Date, to: Date) => {
+  return await prisma.workday.findMany({
+    where: {
+      date: {
+        gte: from,
+        lte: to,
+      },
+    },
+  });
+};
