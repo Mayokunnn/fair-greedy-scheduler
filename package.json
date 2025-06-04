@@ -9,7 +9,8 @@
     "dev": "nodemon src/index.ts",
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
-  "vercel-build": "prisma migrate deploy && prisma db seed && nodemon src/index.ts "
+    "build": "tsc",
+    "vercel-build": "tsc && prisma migrate deploy && prisma db seed && node dist/index.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
