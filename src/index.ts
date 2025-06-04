@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
@@ -18,6 +18,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+// import { Request, Response } from "express";
+
+app.get("/", (req, res: any) => res.json({ message: "API is running..." }));
 app.use("/auth", authRoutes);
 app.use("/schedule", authenticate, authorizeRoles("ADMIN"), scheduleRoutes);
 app.use("/workday", authenticate, workdayRoutes);

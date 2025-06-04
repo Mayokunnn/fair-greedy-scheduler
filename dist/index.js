@@ -19,6 +19,8 @@ app.use(body_parser_1.default.json());
 app.use(body_parser_1.default.urlencoded({ extended: true }));
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
 app.use(express_1.default.json());
+// import { Request, Response } from "express";
+app.get("/", (req, res) => res.json({ message: "API is running..." }));
 app.use("/auth", auth_routes_1.default);
 app.use("/schedule", auth_middleware_1.authenticate, (0, auth_middleware_1.authorizeRoles)("ADMIN"), schedule_routes_1.default);
 app.use("/workday", auth_middleware_1.authenticate, workday_routes_1.default);
