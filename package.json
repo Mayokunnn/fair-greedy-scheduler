@@ -2,15 +2,15 @@
   "name": "fair-greedy-scheduler",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "prisma db seed",
-    "dev": "nodemon src/index.ts",
+    "dev": "nodemon api/index.ts",
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
     "build": "tsc",
-    "vercel-build": "tsc && prisma migrate deploy && prisma db seed && node dist/index.js"
+    "vercel-build": "tsc && prisma migrate deploy"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -26,3 +26,4 @@ app.use("/schedule", auth_middleware_1.authenticate, (0, auth_middleware_1.autho
 app.use("/workday", auth_middleware_1.authenticate, workday_routes_1.default);
 app.use("/users", auth_middleware_1.authenticate, user_routes_1.default);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+exports.default = app;

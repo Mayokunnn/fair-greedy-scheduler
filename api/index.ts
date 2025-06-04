@@ -27,3 +27,5 @@ app.use("/workday", authenticate, workdayRoutes);
 app.use("/users", authenticate, userRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+export default app;
