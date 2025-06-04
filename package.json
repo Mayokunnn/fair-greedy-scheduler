@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "dev": "nodemon src/index.ts",
+    "postinstall": "prisma generate",
+    "migrate": "prisma migrate deploy",
+  "vercel-build": "prisma migrate deploy && prisma db seed && nodemon src/index.ts "
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
