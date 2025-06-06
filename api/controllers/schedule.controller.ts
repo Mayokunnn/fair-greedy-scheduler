@@ -16,7 +16,7 @@ import {
   format,
   subWeeks,
 } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { Role, ScheduleType } from "@prisma/client";
 
 const TIMEZONE = "Africa/Lagos";
@@ -200,19 +200,20 @@ export const evaluateSchedule = async (req: any, res: any) => {
       return res.status(400).json({ message: "'weekStart' date is required" });
     }
 
-    const weekStartDate = startOfWeek(
-      toZonedTime(parseISO(weekStart), TIMEZONE),
-      { weekStartsOn: 1 }
-    );
-    const weekEndDate = addDays(weekStartDate, 4);
+    // Parse weekStart in local timezone and convert to UTC
+    const weekStartLocal = toZonedTime(parseISO(weekStart), TIMEZONE);
+    const weekStartDateLocal = startOfWeek(weekStartLocal, { weekStartsOn: 1 });
+    const weekEndDateLocal = addDays(weekStartDateLocal, 4);
+    const weekStartUTC = fromZonedTime(weekStartDateLocal, TIMEZONE);
+    const weekEndUTC = fromZonedTime(weekEndDateLocal, TIMEZONE);
 
     console.log(
-      `Evaluating schedules for week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`
+      `Evaluating schedules for week ${weekStartUTC.toISOString()} to ${weekEndUTC.toISOString()}`
     );
 
-    // Fetch workdays
+    // Fetch workdays in UTC
     let workdays = await prisma.workday.findMany({
-      where: { date: { gte: weekStartDate, lte: weekEndDate } },
+      where: { date: { gte: weekStartUTC, lte: weekEndUTC } },
       orderBy: { date: "asc" },
     });
 
@@ -223,14 +224,16 @@ export const evaluateSchedule = async (req: any, res: any) => {
       );
       const newWorkdays = [];
       for (let i = 0; i < 5; i++) {
-        newWorkdays.push({ date: addDays(weekStartDate, i) });
+        const dateLocal = addDays(weekStartDateLocal, i);
+        const dateUTC = fromZonedTime(dateLocal, TIMEZONE);
+        newWorkdays.push({ date: dateUTC });
       }
       await prisma.workday.createMany({
         data: newWorkdays,
         skipDuplicates: true,
       });
       workdays = await prisma.workday.findMany({
-        where: { date: { gte: weekStartDate, lte: weekEndDate } },
+        where: { date: { gte: weekStartUTC, lte: weekEndUTC } },
         orderBy: { date: "asc" },
       });
       console.log(`Generated ${workdays.length} workdays`);
@@ -249,14 +252,14 @@ export const evaluateSchedule = async (req: any, res: any) => {
     });
     console.log("Preferred days map:", preferredMap);
 
-    // Fetch historical schedules for fairness scores
-    const historyStartDate = subWeeks(weekStartDate, HISTORY_WEEKS);
+    // Fetch historical schedules in UTC
+    const historyStartUTC = fromZonedTime(subWeeks(weekStartDateLocal, HISTORY_WEEKS), TIMEZONE);
     const historicalSchedules = await prisma.schedule.findMany({
       where: {
         workday: {
           date: {
-            gte: historyStartDate,
-            lt: weekStartDate,
+            gte: historyStartUTC,
+            lt: weekStartUTC,
           },
         },
         type: { in: ["FAIR", "BASIC", "ROUND_ROBIN"] },
@@ -282,10 +285,10 @@ export const evaluateSchedule = async (req: any, res: any) => {
     });
     console.log("Historical fairness scores:", historicalScoreMap);
 
-    // Fetch existing schedules for the current week
+    // Fetch existing schedules for the current week in UTC
     const existingSchedules = await prisma.schedule.findMany({
       where: {
-        workday: { date: { gte: weekStartDate, lte: weekEndDate } },
+        workday: { date: { gte: weekStartUTC, lte: weekEndUTC } },
         type: { in: ["FAIR", "BASIC", "ROUND_ROBIN"] },
       },
       include: { workday: true },
@@ -316,7 +319,7 @@ export const evaluateSchedule = async (req: any, res: any) => {
         return prisma.schedule.findMany({
           where: {
             type: type as ScheduleType,
-            workday: { date: { gte: weekStartDate, lte: weekEndDate } },
+            workday: { date: { gte: weekStartUTC, lte: weekEndUTC } },
           },
           include: { workday: true },
         });
@@ -333,7 +336,7 @@ export const evaluateSchedule = async (req: any, res: any) => {
       generateSchedules(roundRobinScheduler, roundSchedules, "ROUND_ROBIN"),
     ]);
 
-    // Fairness score calculation (aligned with project overview)
+    // Fairness score calculation
     const fairnessScore = (
       schedules: any[],
       allUserIds: string[],
@@ -350,7 +353,6 @@ export const evaluateSchedule = async (req: any, res: any) => {
         allUserIds.map((id) => [id, 0])
       );
 
-      // Count days in current week
       schedules.forEach((s) => {
         const empId = s.employeeId;
         if (!allUserIds.includes(empId)) return;
@@ -365,19 +367,17 @@ export const evaluateSchedule = async (req: any, res: any) => {
         totalDaysCount[empId]++;
         if (isPreferred) {
           preferredDaysCount[empId]++;
-          scoreMap[empId]--; // -1 per preferred day
+          scoreMap[empId]--;
         } else {
           nonPreferredDaysCount[empId]++;
-          scoreMap[empId]++; // +1 per non-preferred day
+          scoreMap[empId]++;
         }
       });
 
-      // Validate scores within -3 to +3
       const outOfBounds = allUserIds.filter(
         (id) => scoreMap[id] < -3 || scoreMap[id] > 3
       );
 
-      // Validate 2-or-3-days rule
       const invalidAssignments = allUserIds.filter((id) => {
         const total = totalDaysCount[id] || 0;
         return (
@@ -386,7 +386,6 @@ export const evaluateSchedule = async (req: any, res: any) => {
         );
       });
 
-      // Calculate fairness metrics
       const values = Object.values(scoreMap).filter((v) => !isNaN(v));
       const avg =
         values.length > 0
