@@ -148,12 +148,16 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!weekStart) {
             return res.status(400).json({ message: "'weekStart' date is required" });
         }
-        const weekStartDate = (0, date_fns_1.startOfWeek)((0, date_fns_tz_1.toZonedTime)((0, date_fns_1.parseISO)(weekStart), TIMEZONE), { weekStartsOn: 1 });
-        const weekEndDate = (0, date_fns_1.addDays)(weekStartDate, 4);
-        console.log(`Evaluating schedules for week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`);
-        // Fetch workdays
+        // Parse weekStart in local timezone and convert to UTC
+        const weekStartLocal = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.parseISO)(weekStart), TIMEZONE);
+        const weekStartDateLocal = (0, date_fns_1.startOfWeek)(weekStartLocal, { weekStartsOn: 1 });
+        const weekEndDateLocal = (0, date_fns_1.addDays)(weekStartDateLocal, 4);
+        const weekStartUTC = (0, date_fns_tz_1.fromZonedTime)(weekStartDateLocal, TIMEZONE);
+        const weekEndUTC = (0, date_fns_tz_1.fromZonedTime)(weekEndDateLocal, TIMEZONE);
+        console.log(`Evaluating schedules for week ${weekStartUTC.toISOString()} to ${weekEndUTC.toISOString()}`);
+        // Fetch workdays in UTC
         let workdays = yield prisma_1.default.workday.findMany({
-            where: { date: { gte: weekStartDate, lte: weekEndDate } },
+            where: { date: { gte: weekStartUTC, lte: weekEndUTC } },
             orderBy: { date: "asc" },
         });
         // Generate workdays if none exist
@@ -161,14 +165,16 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
             console.log(`No workdays found for week starting ${weekStart}. Generating workdays...`);
             const newWorkdays = [];
             for (let i = 0; i < 5; i++) {
-                newWorkdays.push({ date: (0, date_fns_1.addDays)(weekStartDate, i) });
+                const dateLocal = (0, date_fns_1.addDays)(weekStartDateLocal, i);
+                const dateUTC = (0, date_fns_tz_1.fromZonedTime)(dateLocal, TIMEZONE);
+                newWorkdays.push({ date: dateUTC });
             }
             yield prisma_1.default.workday.createMany({
                 data: newWorkdays,
                 skipDuplicates: true,
             });
             workdays = yield prisma_1.default.workday.findMany({
-                where: { date: { gte: weekStartDate, lte: weekEndDate } },
+                where: { date: { gte: weekStartUTC, lte: weekEndUTC } },
                 orderBy: { date: "asc" },
             });
             console.log(`Generated ${workdays.length} workdays`);
@@ -184,14 +190,14 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
             return emp.id;
         });
         console.log("Preferred days map:", preferredMap);
-        // Fetch historical schedules for fairness scores
-        const historyStartDate = (0, date_fns_1.subWeeks)(weekStartDate, HISTORY_WEEKS);
+        // Fetch historical schedules in UTC
+        const historyStartUTC = (0, date_fns_tz_1.fromZonedTime)((0, date_fns_1.subWeeks)(weekStartDateLocal, HISTORY_WEEKS), TIMEZONE);
         const historicalSchedules = yield prisma_1.default.schedule.findMany({
             where: {
                 workday: {
                     date: {
-                        gte: historyStartDate,
-                        lt: weekStartDate,
+                        gte: historyStartUTC,
+                        lt: weekStartUTC,
                     },
                 },
                 type: { in: ["FAIR", "BASIC", "ROUND_ROBIN"] },
@@ -210,10 +216,10 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
             historicalScoreMap[empId] += isPreferred ? -1 : 1;
         });
         console.log("Historical fairness scores:", historicalScoreMap);
-        // Fetch existing schedules for the current week
+        // Fetch existing schedules for the current week in UTC
         const existingSchedules = yield prisma_1.default.schedule.findMany({
             where: {
-                workday: { date: { gte: weekStartDate, lte: weekEndDate } },
+                workday: { date: { gte: weekStartUTC, lte: weekEndUTC } },
                 type: { in: ["FAIR", "BASIC", "ROUND_ROBIN"] },
             },
             include: { workday: true },
@@ -234,7 +240,7 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 return prisma_1.default.schedule.findMany({
                     where: {
                         type: type,
-                        workday: { date: { gte: weekStartDate, lte: weekEndDate } },
+                        workday: { date: { gte: weekStartUTC, lte: weekEndUTC } },
                     },
                     include: { workday: true },
                 });
@@ -249,13 +255,12 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
             generateSchedules(scheduler_service_1.basicGreedyScheduler, basicSchedules, "BASIC"),
             generateSchedules(scheduler_service_1.roundRobinScheduler, roundSchedules, "ROUND_ROBIN"),
         ]);
-        // Fairness score calculation (aligned with project overview)
+        // Fairness score calculation
         const fairnessScore = (schedules, allUserIds, historicalScores) => {
             const scoreMap = Object.assign({}, historicalScores);
             const preferredDaysCount = Object.fromEntries(allUserIds.map((id) => [id, 0]));
             const nonPreferredDaysCount = Object.fromEntries(allUserIds.map((id) => [id, 0]));
             const totalDaysCount = Object.fromEntries(allUserIds.map((id) => [id, 0]));
-            // Count days in current week
             schedules.forEach((s) => {
                 const empId = s.employeeId;
                 if (!allUserIds.includes(empId))
@@ -267,22 +272,19 @@ const evaluateSchedule = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 totalDaysCount[empId]++;
                 if (isPreferred) {
                     preferredDaysCount[empId]++;
-                    scoreMap[empId]--; // -1 per preferred day
+                    scoreMap[empId]--;
                 }
                 else {
                     nonPreferredDaysCount[empId]++;
-                    scoreMap[empId]++; // +1 per non-preferred day
+                    scoreMap[empId]++;
                 }
             });
-            // Validate scores within -3 to +3
             const outOfBounds = allUserIds.filter((id) => scoreMap[id] < -3 || scoreMap[id] > 3);
-            // Validate 2-or-3-days rule
             const invalidAssignments = allUserIds.filter((id) => {
                 const total = totalDaysCount[id] || 0;
                 return (total > 0 &&
                     (total < MIN_DAYS_PER_EMPLOYEE || total > MAX_DAYS_PER_EMPLOYEE));
             });
-            // Calculate fairness metrics
             const values = Object.values(scoreMap).filter((v) => !isNaN(v));
             const avg = values.length > 0
                 ? values.reduce((sum, val) => sum + val, 0) / values.length
