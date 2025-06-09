@@ -10,7 +10,7 @@
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
     "build": "tsc",
-    "vercel-build": "tsc && prisma migrate deploy"
+    "vercel-build": "tsc && prisma migrate deploy && prisma db seed"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
