@@ -1,12 +1,6 @@
 {
   "version": 2,
   "outputDirectory": "dist",
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ],
   "builds": [
     {
       "src": "./index.js",
