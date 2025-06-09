@@ -24,7 +24,7 @@ app.get("/", (req, res: any) => res.json({ message: "API is running..." }));
 app.use("/auth", authRoutes);
 app.use("/schedule", authenticate, authorizeRoles("ADMIN"), scheduleRoutes);
 app.use("/workday", authenticate, workdayRoutes);
-app.use("/users", authenticate, userRoutes);
+app.use("/users", userRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
