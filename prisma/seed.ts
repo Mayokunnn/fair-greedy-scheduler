@@ -1,5 +1,5 @@
 import { PrismaClient, Role } from "@prisma/client";
-import {signup} from "../api/services/auth.service"
+import { signup } from "../api/services/auth.service";
 const prisma = new PrismaClient();
 type WeekDay = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY";
 
@@ -53,6 +53,8 @@ const generatePreferredDays = (): WeekDay[] => {
 };
 
 async function seed() {
+  // Delete schedules first to respect foreign key constraints
+  await prisma.schedule.deleteMany();
   await prisma.user.deleteMany();
 
   const promises = sampleNames.map((fullName, i) => {
