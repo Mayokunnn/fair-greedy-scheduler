@@ -10,8 +10,20 @@ export const generateWorkdaysService = async (
   let currentDate = new Date(startDate);
 
   while (currentDate <= endDate) {
-    workdays.push({ date: new Date(currentDate) });
-    currentDate.setDate(currentDate.getDate() + 1);
+    // Force midnight UTC
+    const normalizedDate = new Date(
+      Date.UTC(
+        currentDate.getUTCFullYear(),
+        currentDate.getUTCMonth(),
+        currentDate.getUTCDate(),
+        0,
+        0,
+        0
+      )
+    );
+
+    workdays.push({ date: normalizedDate });
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
   }
 
   const createdWorkdays = await prisma.$transaction(
@@ -26,7 +38,6 @@ export const generateWorkdaysService = async (
 
   return createdWorkdays;
 };
-
 
 export const getWorkdaysService = async (from: Date, to: Date) => {
   return await prisma.workday.findMany({

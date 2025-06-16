@@ -50,8 +50,9 @@ export const generateFairGreedySchedule = async (req: any, res: any) => {
     }
 
     const fromDate = toZonedTime(parseISO(from), TIMEZONE);
-    const toDate = toZonedTime(parseISO(to), TIMEZONE);
+    const toDate = addDays(toZonedTime(parseISO(to), TIMEZONE), 1);
     const weekStartDate = toZonedTime(parseISO(weekStart), TIMEZONE);
+    console.log(fromDate, toDate);
 
     await generateWorkdaysService(fromDate, toDate);
 
@@ -67,6 +68,8 @@ export const generateFairGreedySchedule = async (req: any, res: any) => {
     console.log(
       `Generating Fair Greedy Schedule for week starting ${weekStart}`
     );
+
+    console.log("Existing workdays count:", workdays.length);
     const result = await fairGreedyScheduler(req.user.id, workdays, weekStart);
 
     res.json({ message: "Fair Greedy Schedule generated", result });
@@ -253,7 +256,10 @@ export const evaluateSchedule = async (req: any, res: any) => {
     console.log("Preferred days map:", preferredMap);
 
     // Fetch historical schedules in UTC
-    const historyStartUTC = fromZonedTime(subWeeks(weekStartDateLocal, HISTORY_WEEKS), TIMEZONE);
+    const historyStartUTC = fromZonedTime(
+      subWeeks(weekStartDateLocal, HISTORY_WEEKS),
+      TIMEZONE
+    );
     const historicalSchedules = await prisma.schedule.findMany({
       where: {
         workday: {

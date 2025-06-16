@@ -9,6 +9,6 @@
     "outDir": "./dist",
     "rootDir": "api"
   },
-  "include": ["api/**/*"],
+  "include": ["api/**/*", "scripts"],
   "exclude": ["node_modules"]
 }

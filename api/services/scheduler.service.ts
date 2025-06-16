@@ -9,6 +9,7 @@ import {
   getWeek,
   isWithinInterval,
   endOfWeek,
+  startOfDay,
 } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
@@ -30,7 +31,7 @@ export const fairGreedyScheduler = async (
     toZonedTime(parseISO(weekStart), TIMEZONE),
     { weekStartsOn: 1 }
   );
-  const weekEndDate = addDays(weekStartDate, 4);
+  const weekEndDate = addDays(weekStartDate, 5); // Friday of the same week
 
   console.log(
     `Processing week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`
@@ -43,15 +44,26 @@ export const fairGreedyScheduler = async (
   });
   console.log(`Week number: ${weekNumber}`);
 
+  for (const wd of workdays) {
+    console.log({
+      id: wd.id,
+      raw: wd.date,
+      zoned: toZonedTime(new Date(wd.date), TIMEZONE),
+      weekday: format(toZonedTime(new Date(wd.date), TIMEZONE), "EEEE"),
+    });
+  }
+
   // Filter workdays for Monday–Friday
   const weekWorkdays = workdays.filter((wd) => {
-    const adjustedDate = new Date(wd.date);
-    adjustedDate.setHours(12); // Avoid timezone edge cases
-    const wdDate = toZonedTime(adjustedDate, TIMEZONE);
-    const weekday = format(wdDate, "EEEE");
+    const localDate = toZonedTime(new Date(wd.date), TIMEZONE);
+    const dateOnly = startOfDay(localDate); // clean it to 00:00 local
+    const weekday = format(dateOnly, "EEEE");
 
     return (
-      isWithinInterval(wdDate, { start: weekStartDate, end: weekEndDate }) &&
+      isWithinInterval(dateOnly, {
+        start: weekStartDate,
+        end: weekEndDate,
+      }) &&
       ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(weekday)
     );
   });
