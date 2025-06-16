@@ -26,19 +26,30 @@ export const fairGreedyScheduler = async (
   weekStart: string
 ) => {
   // Initialize week boundaries (Monday to Friday)
-  const weekStartDate = startOfWeek(toZonedTime(parseISO(weekStart), TIMEZONE), { weekStartsOn: 1 });
+  const weekStartDate = startOfWeek(
+    toZonedTime(parseISO(weekStart), TIMEZONE),
+    { weekStartsOn: 1 }
+  );
   const weekEndDate = addDays(weekStartDate, 4);
 
-  console.log(`Processing week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`);
+  console.log(
+    `Processing week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`
+  );
 
   // Calculate ISO week number for rotation
-  const weekNumber = getWeek(weekStartDate, { weekStartsOn: 1, firstWeekContainsDate: 4 });
+  const weekNumber = getWeek(weekStartDate, {
+    weekStartsOn: 1,
+    firstWeekContainsDate: 4,
+  });
   console.log(`Week number: ${weekNumber}`);
 
   // Filter workdays for Monday–Friday
   const weekWorkdays = workdays.filter((wd) => {
-    const wdDate = toZonedTime(wd.date, TIMEZONE);
+    const adjustedDate = new Date(wd.date);
+    adjustedDate.setHours(12); // Avoid timezone edge cases
+    const wdDate = toZonedTime(adjustedDate, TIMEZONE);
     const weekday = format(wdDate, "EEEE");
+
     return (
       isWithinInterval(wdDate, { start: weekStartDate, end: weekEndDate }) &&
       ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(weekday)
@@ -47,12 +58,18 @@ export const fairGreedyScheduler = async (
 
   console.log(
     `Found ${weekWorkdays.length} workdays:`,
-    weekWorkdays.map((wd) => ({ id: wd.id, date: wd.date.toISOString(), weekday: format(wd.date, "EEEE") }))
+    weekWorkdays.map((wd) => ({
+      id: wd.id,
+      date: wd.date.toISOString(),
+      weekday: format(wd.date, "EEEE"),
+    }))
   );
 
   // Validate sufficient workdays
   if (weekWorkdays.length < 5) {
-    console.error(`Insufficient workdays (${weekWorkdays.length}) for ${weekStart}. Need 5.`);
+    console.error(
+      `Insufficient workdays (${weekWorkdays.length}) for ${weekStart}. Need 5.`
+    );
     return [];
   }
 
@@ -75,13 +92,12 @@ export const fairGreedyScheduler = async (
     return [];
   }
 
-    const totalRequiredSlots = employees.length * MIN_DAYS_PER_EMPLOYEE;
+  const totalRequiredSlots = employees.length * MIN_DAYS_PER_EMPLOYEE;
   if (totalRequiredSlots > totalAvailableSlots) {
     console.warn(
       `Insufficient slots: ${totalRequiredSlots} required, ${totalAvailableSlots} available`
     );
   }
-
 
   // Fetch historical schedules (last 4 weeks)
   const historyStartDate = subWeeks(weekStartDate, HISTORY_WEEKS);
@@ -126,7 +142,9 @@ export const fairGreedyScheduler = async (
       if (!assignedWorkdayIdsPerEmployee[schedule.employeeId]) {
         assignedWorkdayIdsPerEmployee[schedule.employeeId] = new Set();
       }
-      assignedWorkdayIdsPerEmployee[schedule.employeeId].add(schedule.workdayId);
+      assignedWorkdayIdsPerEmployee[schedule.employeeId].add(
+        schedule.workdayId
+      );
     }
   });
 
@@ -141,7 +159,9 @@ export const fairGreedyScheduler = async (
 
   // Check if all employees are at max days
   const allEmployeesAtMax = employees.every(
-    (emp) => (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) >= MAX_DAYS_PER_EMPLOYEE
+    (emp) =>
+      (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) >=
+      MAX_DAYS_PER_EMPLOYEE
   );
   if (allEmployeesAtMax) {
     console.log(`All employees at ${MAX_DAYS_PER_EMPLOYEE} assignments.`);
@@ -164,8 +184,13 @@ export const fairGreedyScheduler = async (
   for (const schedule of allSchedules) {
     const empId = schedule.employeeId;
     if (!employees.some((e) => e.id === empId)) continue;
-    const workday = weekWorkdays.find((wd) => wd.id === schedule.workdayId) || schedule.workday;
-    const weekday = format(toZonedTime(workday.date, TIMEZONE), "EEEE").toLowerCase();
+    const workday =
+      weekWorkdays.find((wd) => wd.id === schedule.workdayId) ||
+      schedule.workday;
+    const weekday = format(
+      toZonedTime(workday.date, TIMEZONE),
+      "EEEE"
+    ).toLowerCase();
     const isPreferred = employees
       .find((e) => e.id === empId)!
       .preferredDays.map((d) => d.toLowerCase())
@@ -188,7 +213,9 @@ export const fairGreedyScheduler = async (
   console.log(`Rotation index: ${rotationIndex}`);
 
   // Rotate employee list
-  const rotatedEmployees = [...employees].slice(rotationIndex).concat([...employees].slice(0, rotationIndex));
+  const rotatedEmployees = [...employees]
+    .slice(rotationIndex)
+    .concat([...employees].slice(0, rotationIndex));
   const rotationOrderMap: Record<string, number> = {};
   rotatedEmployees.forEach((emp, index) => {
     rotationOrderMap[emp.id] = index;
@@ -211,9 +238,14 @@ export const fairGreedyScheduler = async (
 
     if (available.length === 0) return null;
 
-    const preferredDaysLower = employee.preferredDays.map((d) => d.toLowerCase());
+    const preferredDaysLower = employee.preferredDays.map((d) =>
+      d.toLowerCase()
+    );
     const scoredDays = available.map((wd) => {
-      const weekday = format(toZonedTime(wd.date, TIMEZONE), "EEEE").toLowerCase();
+      const weekday = format(
+        toZonedTime(wd.date, TIMEZONE),
+        "EEEE"
+      ).toLowerCase();
       const isPreferred = preferredDaysLower.includes(weekday);
       let scoreAdjustment = 0;
 
@@ -230,7 +262,10 @@ export const fairGreedyScheduler = async (
 
       return {
         workday: wd,
-        score: scoreAdjustment + repetitionPenalty - assignedCountPerDay[wd.id] / MAX_EMPLOYEES_PER_DAY, // Normalize load
+        score:
+          scoreAdjustment +
+          repetitionPenalty -
+          assignedCountPerDay[wd.id] / MAX_EMPLOYEES_PER_DAY, // Normalize load
       };
     });
 
@@ -241,12 +276,15 @@ export const fairGreedyScheduler = async (
 
   // Interleaved assignment loop
   const assignments: any[] = [];
-  const assignedCountPerDay: Record<string, number> = { ...scheduleCountPerWorkday };
+  const assignedCountPerDay: Record<string, number> = {
+    ...scheduleCountPerWorkday,
+  };
 
   while (true) {
     // Filter employees who still need assignments
     const employeesNeedingAssignments = employees.filter(
-      (emp) => assignedWorkdayIdsPerEmployee[emp.id].size < MAX_DAYS_PER_EMPLOYEE
+      (emp) =>
+        assignedWorkdayIdsPerEmployee[emp.id].size < MAX_DAYS_PER_EMPLOYEE
     );
 
     if (employeesNeedingAssignments.length === 0) break;
@@ -269,9 +307,13 @@ export const fairGreedyScheduler = async (
 
     for (const emp of employeesNeedingAssignments) {
       const currentScore = scoreMap[emp.id];
-      if (currentScore <= FAIRNESS_SCORE_MIN || currentScore >= FAIRNESS_SCORE_MAX) {
+      if (
+        currentScore <= FAIRNESS_SCORE_MIN ||
+        currentScore >= FAIRNESS_SCORE_MAX
+      ) {
         // Skip if score is out of bounds, unless necessary
-        if (assignedWorkdayIdsPerEmployee[emp.id].size >= MIN_DAYS_PER_EMPLOYEE) continue;
+        if (assignedWorkdayIdsPerEmployee[emp.id].size >= MIN_DAYS_PER_EMPLOYEE)
+          continue;
       }
 
       const bestDay = getBestAvailableDay(
@@ -299,7 +341,10 @@ export const fairGreedyScheduler = async (
         assignedThisRound++;
 
         // Update fairness score
-        const weekday = format(toZonedTime(bestDay.date, TIMEZONE), "EEEE").toLowerCase();
+        const weekday = format(
+          toZonedTime(bestDay.date, TIMEZONE),
+          "EEEE"
+        ).toLowerCase();
         if (emp.preferredDays.map((d) => d.toLowerCase()).includes(weekday)) {
           scoreMap[emp.id]--; // Preferred day penalty
         } else {
@@ -307,7 +352,10 @@ export const fairGreedyScheduler = async (
         }
 
         console.log(
-          `Assigned ${emp.fullName} to ${format(bestDay.date, "yyyy-MM-dd")} (Score: ${scoreMap[emp.id]})`
+          `Assigned ${emp.fullName} to ${format(
+            bestDay.date,
+            "yyyy-MM-dd"
+          )} (Score: ${scoreMap[emp.id]})`
         );
       }
     }
@@ -317,7 +365,8 @@ export const fairGreedyScheduler = async (
 
   // Validate 2-or-3-days rule
   const underAssignedEmployees = employees.filter(
-    (emp) => (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) < MIN_DAYS_PER_EMPLOYEE
+    (emp) =>
+      (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) < MIN_DAYS_PER_EMPLOYEE
   );
   if (underAssignedEmployees.length > 0) {
     console.warn(
@@ -351,7 +400,6 @@ export const fairGreedyScheduler = async (
 
   return assignments;
 };
-
 
 export const basicGreedyScheduler = async (
   currentUserId: string,
