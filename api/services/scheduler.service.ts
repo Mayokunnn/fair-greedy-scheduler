@@ -5,11 +5,10 @@ import {
   startOfWeek,
   addDays,
   format,
-  subWeeks,
   getWeek,
   isWithinInterval,
-  endOfWeek,
   startOfDay,
+  endOfWeek,
 } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
@@ -19,136 +18,59 @@ const MAX_DAYS_PER_EMPLOYEE = 3;
 const MIN_DAYS_PER_EMPLOYEE = 3;
 const FAIRNESS_SCORE_MIN = -3;
 const FAIRNESS_SCORE_MAX = 3;
-const HISTORY_WEEKS = 4;
 
 export const fairGreedyScheduler = async (
   currentUserId: string,
   workdays: Workday[],
   weekStart: string
 ) => {
-  // Initialize week boundaries (Monday to Friday)
   const weekStartDate = startOfWeek(
     toZonedTime(parseISO(weekStart), TIMEZONE),
-    { weekStartsOn: 1 }
+    {
+      weekStartsOn: 1,
+    }
   );
-  const weekEndDate = addDays(weekStartDate, 5); // Friday of the same week
+  const weekEndDate = addDays(weekStartDate, 5);
 
-  console.log(
-    `Processing week ${weekStartDate.toISOString()} to ${weekEndDate.toISOString()}`
-  );
-
-  // Calculate ISO week number for rotation
-  const weekNumber = getWeek(weekStartDate, {
-    weekStartsOn: 1,
-    firstWeekContainsDate: 4,
-  });
-  console.log(`Week number: ${weekNumber}`);
-
-  for (const wd of workdays) {
-    console.log({
-      id: wd.id,
-      raw: wd.date,
-      zoned: toZonedTime(new Date(wd.date), TIMEZONE),
-      weekday: format(toZonedTime(new Date(wd.date), TIMEZONE), "EEEE"),
-    });
-  }
-
-  // Filter workdays for Monday–Friday
   const weekWorkdays = workdays.filter((wd) => {
     const localDate = toZonedTime(new Date(wd.date), TIMEZONE);
-    const dateOnly = startOfDay(localDate); // clean it to 00:00 local
+    const dateOnly = startOfDay(localDate);
     const weekday = format(dateOnly, "EEEE");
 
     return (
-      isWithinInterval(dateOnly, {
-        start: weekStartDate,
-        end: weekEndDate,
-      }) &&
+      isWithinInterval(dateOnly, { start: weekStartDate, end: weekEndDate }) &&
       ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(weekday)
     );
   });
 
-  console.log(
-    `Found ${weekWorkdays.length} workdays:`,
-    weekWorkdays.map((wd) => ({
-      id: wd.id,
-      date: wd.date.toISOString(),
-      weekday: format(wd.date, "EEEE"),
-    }))
-  );
+  if (weekWorkdays.length < 5) return [];
 
-  // Validate sufficient workdays
-  if (weekWorkdays.length < 5) {
-    console.error(
-      `Insufficient workdays (${weekWorkdays.length}) for ${weekStart}. Need 5.`
-    );
-    return [];
-  }
-
-  // Check available slots vs. required slots
-  const totalAvailableSlots = weekWorkdays.length * MAX_EMPLOYEES_PER_DAY;
-
-  // Fetch employees with consistent ordering
   const employees = await prisma.user.findMany({
     where: { role: Role.EMPLOYEE },
     select: {
       id: true,
       fullName: true,
       preferredDays: true,
+      fairnessScore: true, // Get from DB
     },
-    orderBy: { id: "asc" }, // Consistent base order
+    orderBy: { id: "asc" },
   });
 
-  if (employees.length === 0) {
-    console.error(`No employees available for scheduling in week ${weekStart}`);
-    return [];
-  }
+  if (employees.length === 0) return [];
 
-  const totalRequiredSlots = employees.length * MIN_DAYS_PER_EMPLOYEE;
-  if (totalRequiredSlots > totalAvailableSlots) {
-    console.warn(
-      `Insufficient slots: ${totalRequiredSlots} required, ${totalAvailableSlots} available`
-    );
-  }
-
-  // Fetch historical schedules (last 4 weeks)
-  const historyStartDate = subWeeks(weekStartDate, HISTORY_WEEKS);
-  const historicalSchedules = await prisma.schedule.findMany({
-    where: {
-      workday: {
-        date: {
-          gte: historyStartDate,
-          lt: weekStartDate, // Exclude current week
-        },
-      },
-      type: "FAIR",
-      employeeId: { in: employees.map((e) => e.id) },
-    },
-    include: { workday: true },
-  });
-
-  // Fetch current week's existing schedules
-  const existingSchedules = await prisma.schedule.findMany({
-    where: {
-      workday: {
-        date: {
-          gte: weekStartDate,
-          lte: weekEndDate,
-        },
-      },
-      type: "FAIR",
-    },
-    include: { workday: true },
-  });
-
-  // Track assignments
   const scheduleCountPerWorkday: Record<string, number> = {};
   const assignedWorkdayIdsPerEmployee: Record<string, Set<string>> = {};
-  weekWorkdays.forEach((wd) => {
-    scheduleCountPerWorkday[wd.id] = 0;
+  weekWorkdays.forEach((wd) => (scheduleCountPerWorkday[wd.id] = 0));
+
+  const existingSchedules = await prisma.schedule.findMany({
+    where: {
+      workday: { date: { gte: weekStartDate, lte: weekEndDate } },
+      type: "FAIR",
+    },
+    include: { workday: true },
   });
 
-  existingSchedules.forEach((schedule) => {
+  for (const schedule of existingSchedules) {
     if (weekWorkdays.some((wd) => wd.id === schedule.workdayId)) {
       scheduleCountPerWorkday[schedule.workdayId]++;
       if (!assignedWorkdayIdsPerEmployee[schedule.employeeId]) {
@@ -158,161 +80,44 @@ export const fairGreedyScheduler = async (
         schedule.workdayId
       );
     }
-  });
-
-  // Check if week is fully assigned
-  const isWeekFullyAssigned = weekWorkdays.every(
-    (wd) => scheduleCountPerWorkday[wd.id] >= MAX_EMPLOYEES_PER_DAY
-  );
-  if (isWeekFullyAssigned) {
-    console.log(`Week ${weekStart} fully assigned.`);
-    return ["yooo"];
   }
 
-  // Check if all employees are at max days
-  const allEmployeesAtMax = employees.every(
-    (emp) =>
-      (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) >=
-      MAX_DAYS_PER_EMPLOYEE
-  );
-  if (allEmployeesAtMax) {
-    console.log(`All employees at ${MAX_DAYS_PER_EMPLOYEE} assignments.`);
-    return ["yooo"];
-  }
-
-  // Calculate historical fairness scores
   const scoreMap: Record<string, number> = {};
-  const recentDaysPerEmployee: Record<string, Set<string>> = {};
   for (const emp of employees) {
-    scoreMap[emp.id] = 0;
-    recentDaysPerEmployee[emp.id] = new Set();
-    if (!assignedWorkdayIdsPerEmployee[emp.id]) {
-      assignedWorkdayIdsPerEmployee[emp.id] = new Set();
-    }
+    scoreMap[emp.id] = emp.fairnessScore;
+    assignedWorkdayIdsPerEmployee[emp.id] ||= new Set();
   }
 
-  // Process historical and current schedules
-  const allSchedules = [...historicalSchedules, ...existingSchedules];
-  for (const schedule of allSchedules) {
-    const empId = schedule.employeeId;
-    if (!employees.some((e) => e.id === empId)) continue;
-    const workday =
-      weekWorkdays.find((wd) => wd.id === schedule.workdayId) ||
-      schedule.workday;
-    const weekday = format(
-      toZonedTime(workday.date, TIMEZONE),
-      "EEEE"
-    ).toLowerCase();
-    const isPreferred = employees
-      .find((e) => e.id === empId)!
-      .preferredDays.map((d) => d.toLowerCase())
-      .includes(weekday);
-
-    if (isPreferred) {
-      scoreMap[empId]--; // -1 for preferred day
-    } else {
-      scoreMap[empId]++; // +1 for non-preferred day
-    }
-
-    // Track recent days for repetition penalty
-    recentDaysPerEmployee[empId].add(weekday);
-  }
-
-  console.log("Initial fairness scores:", scoreMap);
-
-  // Calculate rotation index
-  const rotationIndex = (weekNumber - 1) % employees.length;
-  console.log(`Rotation index: ${rotationIndex}`);
-
-  // Rotate employee list
-  const rotatedEmployees = [...employees]
-    .slice(rotationIndex)
-    .concat([...employees].slice(0, rotationIndex));
+  const rotationIndex =
+    (getWeek(weekStartDate, { weekStartsOn: 1, firstWeekContainsDate: 4 }) -
+      1) %
+    employees.length;
+  const rotatedEmployees = [
+    ...employees.slice(rotationIndex),
+    ...employees.slice(0, rotationIndex),
+  ];
   const rotationOrderMap: Record<string, number> = {};
-  rotatedEmployees.forEach((emp, index) => {
-    rotationOrderMap[emp.id] = index;
-  });
+  rotatedEmployees.forEach((emp, index) => (rotationOrderMap[emp.id] = index));
 
-  // Helper function to find the best available day
-  const getBestAvailableDay = (
-    employee: { id: string; preferredDays: string[] },
-    availableWorkdays: Workday[],
-    assignedCountPerDay: Record<string, number>,
-    assignedWorkdayIdsPerEmployee: Record<string, Set<string>>,
-    scoreMap: Record<string, number>,
-    recentDays: Set<string>
-  ) => {
-    const available = availableWorkdays.filter(
-      (wd) =>
-        assignedCountPerDay[wd.id] < MAX_EMPLOYEES_PER_DAY &&
-        !assignedWorkdayIdsPerEmployee[employee.id].has(wd.id)
-    );
-
-    if (available.length === 0) return null;
-
-    const preferredDaysLower = employee.preferredDays.map((d) =>
-      d.toLowerCase()
-    );
-    const scoredDays = available.map((wd) => {
-      const weekday = format(
-        toZonedTime(wd.date, TIMEZONE),
-        "EEEE"
-      ).toLowerCase();
-      const isPreferred = preferredDaysLower.includes(weekday);
-      let scoreAdjustment = 0;
-
-      // Adjust score based on fairness
-      const currentScore = scoreMap[employee.id];
-      if (isPreferred) {
-        scoreAdjustment = currentScore > 0 ? -1 : 0; // Prefer preferred days if score is high
-      } else {
-        scoreAdjustment = currentScore < 0 ? 1 : 0; // Prefer non-preferred days if score is low
-      }
-
-      // Penalty for recently assigned days
-      const repetitionPenalty = recentDays.has(weekday) ? -0.5 : 0;
-
-      return {
-        workday: wd,
-        score:
-          scoreAdjustment +
-          repetitionPenalty -
-          assignedCountPerDay[wd.id] / MAX_EMPLOYEES_PER_DAY, // Normalize load
-      };
-    });
-
-    // Sort by score (descending) to get the best day
-    scoredDays.sort((a, b) => b.score - a.score);
-    return scoredDays[0]?.workday || null;
-  };
-
-  // Interleaved assignment loop
   const assignments: any[] = [];
   const assignedCountPerDay: Record<string, number> = {
     ...scheduleCountPerWorkday,
   };
 
   while (true) {
-    // Filter employees who still need assignments
     const employeesNeedingAssignments = employees.filter(
       (emp) =>
         assignedWorkdayIdsPerEmployee[emp.id].size < MAX_DAYS_PER_EMPLOYEE
     );
-
     if (employeesNeedingAssignments.length === 0) break;
 
-    // Sort by assigned days (ascending), fairness score (ascending), and rotation order
     employeesNeedingAssignments.sort((a, b) => {
       const aAssigned = assignedWorkdayIdsPerEmployee[a.id].size;
       const bAssigned = assignedWorkdayIdsPerEmployee[b.id].size;
-      if (aAssigned !== bAssigned) {
-        return aAssigned - bAssigned; // Fewer assigned days first
-      }
+      if (aAssigned !== bAssigned) return aAssigned - bAssigned;
       const scoreDiff = scoreMap[a.id] - scoreMap[b.id];
-      if (scoreDiff !== 0) {
-        return scoreDiff; // Lower fairness score first
-      }
-      return rotationOrderMap[a.id] - rotationOrderMap[b.id]; // Break ties with rotation
+      if (scoreDiff !== 0) return scoreDiff;
+      return rotationOrderMap[a.id] - rotationOrderMap[b.id];
     });
 
     let assignedThisRound = 0;
@@ -320,95 +125,64 @@ export const fairGreedyScheduler = async (
     for (const emp of employeesNeedingAssignments) {
       const currentScore = scoreMap[emp.id];
       if (
-        currentScore <= FAIRNESS_SCORE_MIN ||
-        currentScore >= FAIRNESS_SCORE_MAX
+        (currentScore <= FAIRNESS_SCORE_MIN ||
+          currentScore >= FAIRNESS_SCORE_MAX) &&
+        assignedWorkdayIdsPerEmployee[emp.id].size >= MIN_DAYS_PER_EMPLOYEE
       ) {
-        // Skip if score is out of bounds, unless necessary
-        if (assignedWorkdayIdsPerEmployee[emp.id].size >= MIN_DAYS_PER_EMPLOYEE)
-          continue;
+        continue;
       }
 
-      const bestDay = getBestAvailableDay(
-        emp,
-        weekWorkdays,
-        assignedCountPerDay,
-        assignedWorkdayIdsPerEmployee,
-        scoreMap,
-        recentDaysPerEmployee[emp.id]
+      const availableDays = weekWorkdays.filter(
+        (wd) =>
+          assignedCountPerDay[wd.id] < MAX_EMPLOYEES_PER_DAY &&
+          !assignedWorkdayIdsPerEmployee[emp.id].has(wd.id)
       );
 
-      if (bestDay) {
-        const schedule = await prisma.schedule.create({
-          data: {
-            employeeId: emp.id,
-            workdayId: bestDay.id,
-            assignedById: currentUserId,
-            type: "FAIR",
-          },
-        });
+      const bestDay = availableDays.find((wd) => true); // very basic greedy
+      if (!bestDay) continue;
 
-        assignedWorkdayIdsPerEmployee[emp.id].add(bestDay.id);
-        assignedCountPerDay[bestDay.id]++;
-        assignments.push(schedule);
-        assignedThisRound++;
+      const weekday = format(
+        toZonedTime(bestDay.date, TIMEZONE),
+        "EEEE"
+      ).toLowerCase();
+      const isPreferred = emp.preferredDays
+        .map((d) => d.toLowerCase())
+        .includes(weekday);
 
-        // Update fairness score
-        const weekday = format(
-          toZonedTime(bestDay.date, TIMEZONE),
-          "EEEE"
-        ).toLowerCase();
-        if (emp.preferredDays.map((d) => d.toLowerCase()).includes(weekday)) {
-          scoreMap[emp.id]--; // Preferred day penalty
-        } else {
-          scoreMap[emp.id]++; // Non-preferred day bonus
-        }
+      let updatedScore = scoreMap[emp.id] + (isPreferred ? -1 : 1);
+      updatedScore = Math.max(
+        FAIRNESS_SCORE_MIN,
+        Math.min(FAIRNESS_SCORE_MAX, updatedScore)
+      );
+      scoreMap[emp.id] = updatedScore;
 
-        console.log(
-          `Assigned ${emp.fullName} to ${format(
-            bestDay.date,
-            "yyyy-MM-dd"
-          )} (Score: ${scoreMap[emp.id]})`
-        );
-      }
+      const schedule = await prisma.schedule.create({
+        data: {
+          employeeId: emp.id,
+          workdayId: bestDay.id,
+          assignedById: currentUserId,
+          type: "FAIR",
+        },
+      });
+
+      assignedWorkdayIdsPerEmployee[emp.id].add(bestDay.id);
+      assignedCountPerDay[bestDay.id]++;
+      assignments.push(schedule);
+      assignedThisRound++;
     }
 
-    if (assignedThisRound === 0) break; // No more assignments possible
+    if (assignedThisRound === 0) break;
   }
 
-  // Validate 2-or-3-days rule
-  const underAssignedEmployees = employees.filter(
-    (emp) =>
-      (assignedWorkdayIdsPerEmployee[emp.id]?.size || 0) < MIN_DAYS_PER_EMPLOYEE
+  // Update fairness scores in DB
+  await Promise.all(
+    Object.entries(scoreMap).map(([empId, score]) =>
+      prisma.user.update({
+        where: { id: empId },
+        data: { fairnessScore: score },
+      })
+    )
   );
-  if (underAssignedEmployees.length > 0) {
-    console.warn(
-      `Warning: ${underAssignedEmployees.length} employees assigned fewer than ${MIN_DAYS_PER_EMPLOYEE} days`,
-      underAssignedEmployees.map((emp) => ({
-        name: emp.fullName,
-        assignedDays: assignedWorkdayIdsPerEmployee[emp.id]?.size || 0,
-      }))
-    );
-  }
-
-  console.log(`Generated ${assignments.length} schedules`);
-  console.log("Final fairness scores:", scoreMap);
-  console.log("Schedules per day:", assignedCountPerDay);
-  console.log(
-    "Employee assignments:",
-    Object.entries(assignedWorkdayIdsPerEmployee).map(([id, set]) => ({
-      id,
-      days: set.size,
-      workdays: Array.from(set).map((wid) => {
-        const wd = weekWorkdays.find((w) => w.id === wid);
-        return wd ? format(wd.date, "yyyy-MM-dd") : "unknown";
-      }),
-    }))
-  );
-
-  if (assignments.length === 0) {
-    console.log(`No new assignments for ${weekStart}.`);
-    return ["yooo"];
-  }
 
   return assignments;
 };

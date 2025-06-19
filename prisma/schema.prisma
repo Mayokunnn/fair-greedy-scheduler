@@ -36,6 +36,7 @@ model User {
   preferredDays     String[]
   assignedSchedules Schedule[] @relation("AssignedBy")
   schedules         Schedule[] @relation("EmployeeSchedules")
+  fairnessScore             Int @default(0)  
 }
 
 enum ScheduleType {

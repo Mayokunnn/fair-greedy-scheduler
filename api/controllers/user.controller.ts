@@ -10,9 +10,10 @@ export const getAllEmployees = async (req: any, res: any) => {
         id: true,
         email: true,
         fullName: true,
-        position:true,
+        position: true,
         role: true,
         createdAt: true,
+        fairnessScore: true,
         schedules: {
           where: { type: "FAIR" },
           select: {
@@ -29,7 +30,7 @@ export const getAllEmployees = async (req: any, res: any) => {
         },
       },
     });
-    
+
     res.json(employees);
   } catch (err) {
     res.status(500).json({ message: "Error fetching employees", error: err });
@@ -46,6 +47,7 @@ export const getAllUsers = async (req: any, res: any) => {
         role: true,
         position: true,
         createdAt: true,
+        fairnessScore: true,
         schedules: {
           where: { type: "FAIR" },
           select: {

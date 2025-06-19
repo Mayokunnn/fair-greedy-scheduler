@@ -38,6 +38,7 @@ export const signup = async (
       position: true,
       preferredDays: true,
       schedules: true,
+      fairnessScore: true,
     },
   });
   return user;
@@ -81,6 +82,7 @@ export const getMe = async (token: string) => {
         schedules: true,
         position: true,
         preferredDays: true,
+        fairnessScore: true,
       },
     });
     return user;
